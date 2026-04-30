@@ -1,0 +1,44 @@
+{
+  "name": "football_chunker_comparison",
+  "dataset": "football_sample",
+  "description": "Compare fixed vs semantic chunking on football data using Qdrant",
+  "pipelines": [
+    {
+      "name": "qdrant_fixed_512",
+      "pipeline": "qdrant_dense",
+      "chunker": "fixed",
+      "chunk_size": 512,
+      "overlap": 64,
+      "embedder_model": "openai/text-embedding-3-small",
+      "llm_model": "claude-haiku-4-5-20251001",
+      "top_k": 5,
+      "extra": {}
+    },
+    {
+      "name": "qdrant_semantic",
+      "pipeline": "qdrant_dense",
+      "chunker": "semantic",
+      "chunk_size": 512,
+      "overlap": 64,
+      "embedder_model": "openai/text-embedding-3-small",
+      "llm_model": "claude-haiku-4-5-20251001",
+      "top_k": 5,
+      "extra": {}
+    },
+    {
+      "name": "falkordb_graphrag",
+      "pipeline": "falkordb_graphrag",
+      "chunker": "fixed",
+      "chunk_size": 1000,
+      "overlap": 100,
+      "embedder_model": "openai/text-embedding-3-large",
+      "llm_model": "openai/gpt-4o-mini",
+      "top_k": 5,
+      "extra": {
+        "falkordb_host": "localhost",
+        "graph_name": "football_bench"
+      }
+    }
+  ],
+  "metrics": ["faithfulness", "answer_relevancy", "context_precision", "hit_rate", "latency_p95"]
+}
