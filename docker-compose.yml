@@ -15,16 +15,16 @@ services:
     volumes:
       - chroma_data:/chroma/chroma
 
-  elasticsearch:
-    image: docker.elastic.co/elasticsearch/elasticsearch:8.13.0
+  neo4j:
+    image: neo4j:5.20-community
     environment:
-      - discovery.type=single-node
-      - xpack.security.enabled=false
-      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+      - NEO4J_AUTH=neo4j/password
+      - NEO4J_PLUGINS=["apoc"]
     ports:
-      - "9200:9200"
+      - "7474:7474"
+      - "7687:7687"
     volumes:
-      - es_data:/usr/share/elasticsearch/data
+      - neo4j_data:/data
 
   falkordb:
     image: falkordb/falkordb:latest
@@ -63,5 +63,5 @@ services:
 volumes:
   qdrant_data:
   chroma_data:
-  es_data:
+  neo4j_data:
   falkordb_data:
