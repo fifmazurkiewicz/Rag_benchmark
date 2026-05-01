@@ -33,9 +33,12 @@ class ModularPipeline:
         self._chunker = build_chunker(cfg.get("chunker", "fixed"), cfg)
         self._embedder = build_embedder(cfg.get("embedder_model", "openai/text-embedding-3-small"), cfg)
         self._store = reg_build("vector_store", cfg.get("vector_store", "qdrant"), cfg)
+        self._reranker = reg_build("reranker", cfg.get("reranker", "none"), cfg)
         self._retrieval = cfg.get("retrieval", "dense")
         self._llm_model = cfg.get("llm_model", "claude-haiku-4-5-20251001")
         self._top_k = int(cfg.get("top_k", 5))
+        # retrieve more candidates before reranking, then trim to top_k
+        self._retrieve_k = int(cfg.get("retrieve_k", self._top_k * 4))
         self._llm_client = None
 
     def _get_llm(self):
@@ -77,8 +80,10 @@ class ModularPipeline:
 
     async def query(self, question: str, top_k: int = 5) -> PipelineResult:
         t0 = time.perf_counter()
+        effective_top_k = top_k or self._top_k
         query_vec = self._embedder.embed_query(question)
-        chunks = self._store.search(query_vec, top_k or self._top_k)
+        candidates = self._store.search(query_vec, self._retrieve_k)
+        chunks = self._reranker.rerank(question, candidates, effective_top_k)
         answer, tokens = self._generate(question, chunks)
         return PipelineResult(
             answer=answer,

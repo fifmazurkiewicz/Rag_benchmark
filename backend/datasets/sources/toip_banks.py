@@ -143,27 +143,10 @@ def _download(url: str, timeout: int = 30) -> bytes | None:
         return None
 
 
-def _pdf_to_text(data: bytes) -> str:
-    """Extract plain text from PDF bytes using pdfplumber."""
-    import pdfplumber
-
-    text_parts: list[str] = []
-    with pdfplumber.open(io.BytesIO(data)) as pdf:
-        for page in pdf.pages:
-            # Extract tables first (structured data)
-            tables = page.extract_tables()
-            for table in tables:
-                for row in table:
-                    row_text = " | ".join(str(cell or "").strip() for cell in row)
-                    if row_text.strip(" |"):
-                        text_parts.append(row_text)
-
-            # Then remaining plain text (headings, notes)
-            page_text = page.extract_text() or ""
-            if page_text.strip():
-                text_parts.append(page_text)
-
-    return "\n".join(text_parts).strip()
+def _pdf_to_markdown(data: bytes, url: str = "") -> str:
+    """Convert PDF bytes to Markdown via Docling (falls back to pdfplumber)."""
+    from backend.datasets.docling_converter import convert_pdf_to_markdown
+    return convert_pdf_to_markdown(data, origin_url=url)
 
 
 @source("toip_banks")
@@ -202,7 +185,7 @@ def build(config: dict[str, Any]) -> dict:
                 continue
 
             try:
-                text = _pdf_to_text(pdf_bytes)
+                text = _pdf_to_markdown(pdf_bytes, url=url)
             except Exception as exc:
                 errors.append({"bank": bank_id, "url": url, "error": str(exc)})
                 continue
@@ -214,7 +197,7 @@ def build(config: dict[str, Any]) -> dict:
             doc_id = str(uuid.uuid5(uuid.NAMESPACE_URL, url))
             documents.append({
                 "id": doc_id,
-                "text": text,
+                "text": text,          # Markdown — tables, headings preserved
                 "metadata": {
                     "bank":    bank_id,
                     "label":   label,
@@ -222,6 +205,7 @@ def build(config: dict[str, Any]) -> dict:
                     "url":     url,
                     "domain":  "financial",
                     "source":  "toip_banks",
+                    "format":  "markdown",
                 },
             })
 
