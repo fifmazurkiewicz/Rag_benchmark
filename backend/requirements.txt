@@ -20,7 +20,9 @@ sentence-transformers>=2.7.0
 # Obsidian vault parsing
 pyyaml>=6.0.1
 
+# Dataset sources (HuggingFace loaders)
+datasets>=2.19.0
+
 # Evaluation
 ragas>=0.1.14
 deepeval>=0.21.0
-datasets>=2.19.0

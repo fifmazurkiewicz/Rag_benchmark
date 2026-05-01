@@ -3,6 +3,7 @@ import json
 import pathlib
 from fastapi import APIRouter, UploadFile, HTTPException, BackgroundTasks
 from pydantic import BaseModel
+from typing import Any
 
 router = APIRouter(prefix="/datasets", tags=["datasets"])
 
@@ -91,6 +92,59 @@ def _do_vault_import(req: VaultImportRequest):
             if len(text.split()) < 30:
                 continue
             pairs = generate_qa_pairs(text, n=req.qa_per_note, model=req.llm_model)
+            for p in pairs:
+                p["doc_id"] = doc["id"]
+            qa.extend(pairs)
+        dataset["qa_pairs"] = qa
+
+    path = DATASETS_DIR / f"{req.dataset_name}.json"
+    path.write_text(json.dumps(dataset, indent=2, ensure_ascii=False))
+
+
+class SourceBuildRequest(BaseModel):
+    source: str
+    dataset_name: str
+    config: dict[str, Any] = {}
+    generate_qa: bool = False
+    qa_per_doc: int = 3
+    llm_model: str = "claude-haiku-4-5-20251001"
+
+
+@router.get("/sources/")
+def list_sources():
+    """List all registered dataset sources."""
+    from backend.datasets.sources_registry import available
+    return available()
+
+
+@router.post("/from-source")
+def build_from_source(req: SourceBuildRequest, background_tasks: BackgroundTasks):
+    """
+    Build a dataset from a registered source (finqa, medqa, wikipedia, pubmed, football, volleyball).
+    Sources with built-in QA (finqa, medqa, medmcqa) need no generate_qa.
+    Sources without QA (wikipedia, pubmed, football, volleyball) can auto-generate via Claude.
+    """
+    from backend.datasets.sources_registry import available
+    names = [s["name"] for s in available()]
+    if req.source not in names:
+        raise HTTPException(400, f"Unknown source '{req.source}'. Available: {names}")
+    background_tasks.add_task(_do_source_build, req)
+    return {"status": "building", "dataset_name": req.dataset_name, "source": req.source}
+
+
+def _do_source_build(req: SourceBuildRequest):
+    from backend.datasets.sources_registry import build
+    from backend.datasets.generator import generate_qa_pairs
+
+    dataset = build(req.source, req.config)
+
+    if req.generate_qa and not dataset.get("qa_pairs"):
+        qa: list[dict] = []
+        for doc in dataset["documents"]:
+            text = doc["text"]
+            if len(text.split()) < 50:
+                continue
+            pairs = generate_qa_pairs(text, n=req.qa_per_doc, model=req.llm_model)
             for p in pairs:
                 p["doc_id"] = doc["id"]
             qa.extend(pairs)

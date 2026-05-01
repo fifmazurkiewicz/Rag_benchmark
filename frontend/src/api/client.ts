@@ -32,6 +32,9 @@ export const api = {
   getRunResult: (runId: string) => request<ExperimentResult>(`/experiments/results/${runId}`),
   listResults: () => request<string[]>("/experiments/results/"),
 
+  // Dataset sources
+  listSources: () => request<{ name: string; description: string }[]>("/datasets/sources/"),
+
   // Datasets
   listDatasets: () => request<DatasetMeta[]>("/datasets/"),
   getDataset: (name: string) => request<unknown>(`/datasets/${name}`),
