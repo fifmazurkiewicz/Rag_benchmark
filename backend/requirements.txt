@@ -17,6 +17,9 @@ graphrag-sdk[litellm]>=1.0.0
 # Chunking / NLP
 sentence-transformers>=2.7.0
 
+# PDF parsing (TOiP bank documents)
+pdfplumber>=0.11.0
+
 # Obsidian vault parsing
 pyyaml>=6.0.1
 
