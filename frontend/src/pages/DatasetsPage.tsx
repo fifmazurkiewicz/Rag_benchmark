@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { api } from "../api/client";
+import DatasetSourceBuilder from "../components/DatasetSourceBuilder";
 
 interface VaultForm {
   vault_path: string;
@@ -82,6 +83,7 @@ export default function DatasetsPage() {
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Datasets</h1>
         <div className="flex gap-3">
+          <DatasetSourceBuilder onBuilt={() => qc.invalidateQueries({ queryKey: ["datasets"] })} />
           <button
             onClick={() => { setShowVaultForm(!showVaultForm); setVaultStats(null); }}
             className="px-4 py-2 bg-violet-700 hover:bg-violet-600 rounded text-sm font-medium transition-colors"
