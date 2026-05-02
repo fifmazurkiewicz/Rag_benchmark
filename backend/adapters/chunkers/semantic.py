@@ -2,15 +2,10 @@ from __future__ import annotations
 import re
 import uuid
 from typing import Any
+from backend.config import DEFAULT_SIMILARITY_THRESHOLD, DEFAULT_EMBEDDER_MODEL
 from backend.registry import register
 from backend.interfaces import Document, Chunk
-
-
-def _cosine(a: list[float], b: list[float]) -> float:
-    dot = sum(x * y for x, y in zip(a, b))
-    na = sum(x * x for x in a) ** 0.5
-    nb = sum(x * x for x in b) ** 0.5
-    return dot / (na * nb) if na and nb else 0.0
+from backend.utils.similarity import cosine_similarity
 
 
 def _split_sentences(text: str) -> list[str]:
@@ -22,9 +17,9 @@ class SemanticChunker:
     """Groups sentences until cosine similarity drops below threshold."""
 
     def __init__(self, config: dict[str, Any]):
-        self.threshold = float(config.get("similarity_threshold", 0.75))
+        self.threshold = float(config.get("similarity_threshold", DEFAULT_SIMILARITY_THRESHOLD))
         self._embedder = None
-        self._embedder_name = config.get("embedder_model", "openai/text-embedding-3-small")
+        self._embedder_name = config.get("embedder_model", DEFAULT_EMBEDDER_MODEL)
 
     def _get_embedder(self):
         if self._embedder is None:
@@ -48,7 +43,7 @@ class SemanticChunker:
         group_vec = vecs[0]
 
         for sent, vec in zip(sentences[1:], vecs[1:]):
-            sim = _cosine(group_vec, vec)
+            sim = cosine_similarity(group_vec, vec)
             if sim >= self.threshold:
                 group.append(sent)
                 group_vec = [
