@@ -14,8 +14,6 @@ from typing import Any
 from backend.config import (
     DEFAULT_LLM_MODEL,
     DEFAULT_EMBEDDER_MODEL,
-    DEFAULT_CHUNK_SIZE,
-    DEFAULT_OVERLAP,
     DEFAULT_TOP_K,
     DEFAULT_MAX_TOKENS,
     RETRIEVE_K_MULTIPLIER,

@@ -22,7 +22,6 @@ async def execute_experiment(run_id: str, config: ExperimentConfig, run: RunStat
     Updates `run` in-place so callers (e.g. WebSocket broadcaster) see live progress.
     Raises on unrecoverable errors; caller is responsible for setting run.status = "error".
     """
-    from backend.factory import build_pipeline
     from backend.datasets.loaders import load_dataset
     from backend.evaluation.engine import evaluate_pipeline
 

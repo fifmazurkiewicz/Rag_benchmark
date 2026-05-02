@@ -46,10 +46,8 @@ class SemanticChunker:
             sim = cosine_similarity(group_vec, vec)
             if sim >= self.threshold:
                 group.append(sent)
-                group_vec = [
-                    (a * len(group) + b) / (len(group) + 1)
-                    for a, b in zip(group_vec, vec)
-                ]
+                n = len(group)
+                group_vec = [(a * (n - 1) + b) / n for a, b in zip(group_vec, vec)]
             else:
                 chunks.append(Chunk(
                     id=str(uuid.uuid4()),
