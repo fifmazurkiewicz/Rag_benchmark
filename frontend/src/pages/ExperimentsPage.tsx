@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { api } from "../api/client";
 import type { ExperimentConfig } from "../api/types";
 import ConfigBuilder from "../components/ConfigBuilder";
+import PipelineVisualizer from "../components/PipelineVisualizer";
 
 export default function ExperimentsPage() {
   const navigate = useNavigate();
@@ -62,20 +63,53 @@ export default function ExperimentsPage() {
             </div>
           )}
           {experiments?.map((name) => (
-            <div
+            <ExperimentRow
               key={name}
-              className="flex items-center justify-between border border-gray-700 rounded-lg px-4 py-3 bg-gray-900 hover:border-gray-600"
-            >
-              <span className="font-mono text-indigo-300">{name}</span>
-              <button
-                onClick={() => runMutation.mutate(name)}
-                disabled={runMutation.isPending}
-                className="text-sm px-3 py-1 border border-indigo-700 text-indigo-400 hover:bg-indigo-900/50 rounded transition-colors disabled:opacity-50"
-              >
-                Run
-              </button>
-            </div>
+              name={name}
+              onRun={() => runMutation.mutate(name)}
+              running={runMutation.isPending}
+            />
           ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ExperimentRow({ name, onRun, running }: { name: string; onRun: () => void; running: boolean }) {
+  const [expanded, setExpanded] = useState(false);
+  const { data: cfg } = useQuery({
+    queryKey: ["experiment", name],
+    queryFn: () => api.getExperiment(name),
+    enabled: expanded,
+  });
+
+  return (
+    <div className="border border-gray-700 rounded-lg bg-gray-900 hover:border-gray-600 transition-colors">
+      <div className="flex items-center justify-between px-4 py-3">
+        <button
+          onClick={() => setExpanded((e) => !e)}
+          className="flex items-center gap-2 font-mono text-indigo-300 hover:text-indigo-200"
+        >
+          <span className="text-gray-600 text-xs">{expanded ? "▼" : "▶"}</span>
+          {name}
+        </button>
+        <button
+          onClick={onRun}
+          disabled={running}
+          className="text-sm px-3 py-1 border border-indigo-700 text-indigo-400 hover:bg-indigo-900/50 rounded transition-colors disabled:opacity-50"
+        >
+          Run
+        </button>
+      </div>
+
+      {expanded && cfg && (
+        <div className="border-t border-gray-800 px-4 py-3 space-y-2">
+          <div className="text-xs text-gray-500">
+            dataset: <span className="text-gray-300">{cfg.dataset}</span>
+            {cfg.description && <span className="ml-3 italic">{cfg.description}</span>}
+          </div>
+          <PipelineVisualizer pipelines={cfg.pipelines} />
         </div>
       )}
     </div>

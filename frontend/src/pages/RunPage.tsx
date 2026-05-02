@@ -5,6 +5,8 @@ import RunMonitor from "../components/RunMonitor";
 import { api } from "../api/client";
 import MetricsTable from "../components/Dashboard/MetricsTable";
 import RadarChart from "../components/Dashboard/RadarChart";
+import PipelineVisualizer from "../components/PipelineVisualizer";
+import type { PipelineConfig } from "../api/types";
 
 export default function RunPage() {
   const { runId } = useParams<{ runId: string }>();
@@ -37,16 +39,38 @@ export default function RunPage() {
       />
 
       {result && (
-        <div className="border border-gray-700 rounded-xl p-6 space-y-6 bg-gray-900">
-          <h2 className="text-lg font-semibold">Results: {result.experiment_name}</h2>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div>
-              <h3 className="text-sm font-medium text-gray-400 mb-3">Radar</h3>
-              <RadarChart result={result} />
+        <div className="space-y-6">
+          {/* Pipeline visualizer — shows configs stored in results */}
+          {result.pipeline_results.some((pr) => pr.config) && (
+            <div className="border border-gray-700 rounded-xl p-6 bg-gray-900">
+              <h2 className="text-sm font-medium text-gray-400 mb-3">Pipeline configuration</h2>
+              <PipelineVisualizer
+                pipelines={result.pipeline_results
+                  .filter((pr) => pr.config)
+                  .map((pr) => pr.config as PipelineConfig)}
+              />
             </div>
-            <div>
-              <h3 className="text-sm font-medium text-gray-400 mb-3">Scores</h3>
-              <MetricsTable result={result} />
+          )}
+
+          <div className="border border-gray-700 rounded-xl p-6 space-y-6 bg-gray-900">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold">Results: {result.experiment_name}</h2>
+              <button
+                onClick={() => api.exportExcel(runId!)}
+                className="text-xs px-3 py-1 border border-gray-600 text-gray-400 hover:text-white hover:border-gray-400 rounded transition-colors"
+              >
+                Export xlsx
+              </button>
+            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div>
+                <h3 className="text-sm font-medium text-gray-400 mb-3">Radar</h3>
+                <RadarChart result={result} />
+              </div>
+              <div>
+                <h3 className="text-sm font-medium text-gray-400 mb-3">Scores</h3>
+                <MetricsTable result={result} />
+              </div>
             </div>
           </div>
         </div>
