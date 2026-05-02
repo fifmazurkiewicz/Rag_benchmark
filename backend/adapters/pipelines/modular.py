@@ -33,6 +33,7 @@ class ModularPipeline:
         self._chunker = build_chunker(cfg.get("chunker", "fixed"), cfg)
         self._embedder = build_embedder(cfg.get("embedder_model", "openai/text-embedding-3-small"), cfg)
         self._store = reg_build("vector_store", cfg.get("vector_store", "qdrant"), cfg)
+        self._query_transformer = reg_build("query_transformer", cfg.get("query_transformer", "none"), cfg)
         self._reranker = reg_build("reranker", cfg.get("reranker", "none"), cfg)
         self._retrieval = cfg.get("retrieval", "dense")
         self._llm_model = cfg.get("llm_model", "claude-haiku-4-5-20251001")
@@ -81,8 +82,14 @@ class ModularPipeline:
     async def query(self, question: str, top_k: int = 5) -> PipelineResult:
         t0 = time.perf_counter()
         effective_top_k = top_k or self._top_k
-        query_vec = self._embedder.embed_query(question)
+
+        # query_transformer may replace the query with a hypothetical answer (HyDE)
+        # or any other pre-retrieval transformation; reranker still sees original question
+        retrieval_query = self._query_transformer.transform(question)
+
+        query_vec = self._embedder.embed_query(retrieval_query)
         candidates = self._store.search(query_vec, self._retrieve_k)
+        # reranker always scores against the original question, not the transformed one
         chunks = self._reranker.rerank(question, candidates, effective_top_k)
         answer, tokens = self._generate(question, chunks)
         return PipelineResult(
@@ -90,6 +97,7 @@ class ModularPipeline:
             source_chunks=chunks,
             latency_ms=(time.perf_counter() - t0) * 1000,
             tokens_used=tokens,
+            metadata={"retrieval_query": retrieval_query} if retrieval_query != question else {},
         )
 
     async def teardown(self) -> None:
