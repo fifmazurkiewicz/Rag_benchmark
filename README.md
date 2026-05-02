@@ -85,7 +85,7 @@ All LLM generation, embedding, and reranking go through **OpenRouter** (`openai`
 | `recursive` | Hierarchical split: `\n\n` → `\n` → `. ` → char | `chunk_size`, `overlap` |
 | `semantic` | Splits when cosine similarity drops between sentences | `similarity_threshold` |
 | `markdown` | Splits on H1-H6 headings | `chunk_size` |
-| `late_chunking` | Encode full document first, then split token embeddings | `chunk_size`, `late_chunking_model` |
+| `late_chunking` | Encode full document first (BAAI/bge-m3), then split token embeddings — each chunk vector carries full-document context. Pipeline skips re-embedding automatically. | `chunk_size`, `late_chunking_model` |
 | `propositional` | LLM decomposes text into atomic propositions | `llm_model` |
 | `obsidian` | Heading-aware + `[[wikilink]]` backlink context | `vault_path` |
 
@@ -110,15 +110,17 @@ All LLM generation, embedding, and reranking go through **OpenRouter** (`openai`
 
 ### Pipelines
 
-| Name | Type | Description |
-|---|---|---|
-| `qdrant_dense` | Modular | Dense retrieval → Qdrant |
-| `qdrant_hybrid` | Modular | Hybrid (dense + sparse) → Qdrant |
-| `chroma_dense` | Modular | Dense retrieval → Chroma |
-| `neo4j_dense` | Modular | Dense retrieval → Neo4j |
-| `neo4j_graphrag` | Graph | Entity extraction + graph traversal |
-| `falkordb_graphrag` | Graph | FalkorDB GraphRAG SDK (monolithic) |
-| `obsidian_rag` | Obsidian | Vault-aware + wikilink graph expansion |
+| Name | Type | Reranker | Query transformer | Description |
+|---|---|---|---|---|
+| `qdrant_dense` | Modular | ✅ | ✅ | Dense retrieval → Qdrant |
+| `qdrant_hybrid` | Modular | ✅ | ✅ | Hybrid (dense + sparse) → Qdrant |
+| `chroma_dense` | Modular | ✅ | ✅ | Dense retrieval → Chroma |
+| `neo4j_dense` | Modular | ✅ | ✅ | Dense retrieval → Neo4j |
+| `neo4j_graphrag` | Graph | — | — | Entity extraction + graph traversal |
+| `falkordb_graphrag` | Graph | — | — | FalkorDB GraphRAG SDK (monolithic) |
+| `obsidian_rag` | Obsidian | — | — | Vault-aware + wikilink graph expansion |
+
+Pipelines are intentionally elastic — graph pipelines don't need a reranker or query transformer and simply don't implement those hooks.
 
 ### Query transformers
 
@@ -176,6 +178,11 @@ An experiment compares multiple pipeline configurations on the same dataset.
     }
   ]
 }
+```
+
+**`retrieve_k`**: number of candidates to fetch before reranking. `0` (default) means `top_k × 4` automatically. Set explicitly when using a reranker to control the reranking pool size — e.g. `top_k: 5, retrieve_k: 20` fetches 20 candidates and reranks down to 5.
+
+```json
 ```
 
 **Result caching**: experiments are fingerprinted by SHA-256 hash of `(dataset + pipeline configs + metrics)`. Running the same config twice returns the cached `run_id` instantly. Use `POST /experiments/{name}/run?force=true` to bypass.
@@ -334,7 +341,7 @@ Rag_benchmark/
 │   └── registry.py             # @register decorator
 ├── frontend/src/
 │   ├── pages/                  # Experiments, Run, Dashboard, Datasets, Leaderboard
-│   └── components/             # ConfigBuilder, Dashboard, RunMonitor
+│   └── components/             # ConfigBuilder, Dashboard, RunMonitor, PipelineVisualizer
 ├── docs/
 │   └── hyde.md                 # HyDE technique documentation
 ├── CLAUDE.md                   # Developer reference for Claude Code

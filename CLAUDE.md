@@ -107,23 +107,36 @@ def build(config: dict) -> dict:
 ### Ingest
 ```
 Document list
-  → chunker.chunk(doc)           → list[Chunk]
-  → embedder.embed([c.text])     → list[list[float]]
+  → chunker.chunk(doc)                         → list[Chunk]
+  → if all chunks have _precomputed_embedding  → use those vectors directly
+    else embedder.embed([c.text])              → list[list[float]]
   → vector_store.upsert(chunks, vectors)
 ```
+
+The `_precomputed_embedding` shortcut is used by `late_chunking` — it encodes the full
+document context into each chunk's vector at chunk time, so re-embedding would destroy
+that context. Any other chunker leaves the field absent, triggering normal embedding.
 
 ### Query
 ```
 user question
   → query_transformer.transform(q)   # HyDE or passthrough
   → embedder.embed_query(transformed)
-  → vector_store.search(vec, retrieve_k)   # retrieve_k = top_k * 4 by default
+  → vector_store.search(vec, retrieve_k)   # retrieve_k: 0 → auto (top_k × 4)
   → reranker.rerank(ORIGINAL_question, candidates, top_k)
   → LLM generate(question, top_chunks)  # via OpenRouter
   → PipelineResult
 ```
 
 **Important**: reranker always scores against the **original** question, not the HyDE-transformed one.
+
+### Pipeline elasticity
+
+Not every pipeline needs every component. `ModularPipeline` wires the full stack
+(chunker → embedder → vector_store → query_transformer → reranker → LLM).
+Graph pipelines (`neo4j_graphrag`, `falkordb_graphrag`, `obsidian_rag`) are intentionally
+simpler — they don't accept a `reranker` or `query_transformer` config key, and that's fine.
+Only add those hooks to a pipeline when the architecture actually supports them.
 
 ---
 
@@ -156,6 +169,7 @@ direct-provider adapters — route through OpenRouter instead.
 | `backend/datasets/markdown_store.py` | Save/load `.md` datasets with YAML frontmatter |
 | `backend/datasets/docling_converter.py` | PDF → Markdown (Docling primary, pdfplumber fallback) |
 | `frontend/src/api/types.ts` | All TypeScript interfaces — keep in sync with Pydantic models |
+| `frontend/src/components/PipelineVisualizer.tsx` | Diagram + JSON view of pipeline config; used in ExperimentsPage and RunPage |
 
 ---
 
@@ -224,7 +238,9 @@ Required: Qdrant running on `localhost:6333` (or change `qdrant_host` in config)
   receives `question` (original), not `retrieval_query`. This is intentional.
 
 - **`retrieve_k = 0`** in config means "use `top_k * 4`". The actual value is computed in
-  `ModularPipeline.__init__`: `self._retrieve_k = int(cfg.get("retrieve_k", self._top_k * 4))`.
+  `ModularPipeline.__init__` as `raw = int(cfg.get("retrieve_k", 0)); self._retrieve_k = raw if raw > 0 else top_k * 4`.
+  Using `cfg.get("retrieve_k", fallback)` alone was a bug — when the key existed with value 0,
+  Python returned 0 (no fallback), causing `search(vec, 0)` → no results. Always use the `or` pattern.
 
 - **Excel export** requires `openpyxl`. If missing, `GET /results/{id}/export` will raise
   `ImportError` at request time (not at startup).
