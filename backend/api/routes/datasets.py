@@ -4,6 +4,7 @@ import pathlib
 from fastapi import APIRouter, UploadFile, HTTPException, BackgroundTasks
 from pydantic import BaseModel
 from typing import Any
+from backend.config import DEFAULT_LLM_MODEL
 
 router = APIRouter(prefix="/datasets", tags=["datasets"])
 
@@ -24,7 +25,7 @@ class VaultImportRequest(BaseModel):
     excluded_folders: list[str] = []
     generate_qa: bool = False
     qa_per_note: int = 3
-    llm_model: str = "claude-haiku-4-5-20251001"
+    llm_model: str = DEFAULT_LLM_MODEL
 
 
 @router.get("/", response_model=list[DatasetMeta])
@@ -107,7 +108,7 @@ class SourceBuildRequest(BaseModel):
     config: dict[str, Any] = {}
     generate_qa: bool = False
     qa_per_doc: int = 3
-    llm_model: str = "claude-haiku-4-5-20251001"
+    llm_model: str = DEFAULT_LLM_MODEL
 
 
 @router.get("/sources/")

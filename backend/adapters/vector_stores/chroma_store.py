@@ -31,13 +31,14 @@ class ChromaVectorStore:
             include=["documents", "metadatas", "distances"],
         )
         chunks = []
-        for doc, meta, dist in zip(
+        for chunk_id, doc, meta, dist in zip(
+            results["ids"][0],
             results["documents"][0],
             results["metadatas"][0],
             results["distances"][0],
         ):
             chunks.append(Chunk(
-                id=meta.get("chunk_id", ""),
+                id=chunk_id,
                 doc_id=meta.get("doc_id", ""),
                 text=doc,
                 index=meta.get("index", 0),

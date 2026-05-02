@@ -3,6 +3,7 @@ import json
 import re
 import uuid
 from typing import Any
+from backend.config import DEFAULT_LLM_MODEL
 from backend.registry import register
 from backend.interfaces import Document, Chunk
 
@@ -19,26 +20,28 @@ class PropositionalChunker:
     """Uses an LLM to decompose text into atomic propositions."""
 
     def __init__(self, config: dict[str, Any]):
-        self._llm_model = config.get("llm_model", "claude-haiku-4-5-20251001")
-        self._client = None
+        self._llm_model = config.get("llm_model", DEFAULT_LLM_MODEL)
+        self._api_key   = config.get("openrouter_api_key")
+        self._client    = None
 
     def _get_client(self):
         if self._client is None:
-            import anthropic
-            self._client = anthropic.Anthropic()
+            from backend.services.openrouter_client import create_openrouter_client
+            self._client = create_openrouter_client(self._api_key)
         return self._client
 
     def chunk(self, doc: Document) -> list[Chunk]:
-        client = self._get_client()
-        response = client.messages.create(
+        response = self._get_client().chat.completions.create(
             model=self._llm_model,
             max_tokens=4096,
-            system=_SYSTEM,
-            messages=[{"role": "user", "content": doc.text}],
+            messages=[
+                {"role": "system", "content": _SYSTEM},
+                {"role": "user",   "content": doc.text},
+            ],
         )
-        raw = response.content[0].text.strip()
-        json_str = re.search(r"\[.*\]", raw, re.DOTALL)
-        propositions: list[str] = json.loads(json_str.group()) if json_str else [doc.text]
+        raw = response.choices[0].message.content or ""
+        json_match = re.search(r"\[.*\]", raw, re.DOTALL)
+        propositions: list[str] = json.loads(json_match.group()) if json_match else [doc.text]
 
         return [
             Chunk(

@@ -1,9 +1,10 @@
 from __future__ import annotations
 import json
 import pathlib
-import uuid
+import re
 from typing import Literal
-import anthropic
+
+from backend.config import DEFAULT_LLM_MODEL
 
 DATASETS_DIR = pathlib.Path("datasets_store")
 DATASETS_DIR.mkdir(exist_ok=True)
@@ -16,16 +17,23 @@ Return ONLY the JSON array, no other text."""
 DomainType = Literal["financial", "football", "volleyball", "neurology", "custom"]
 
 
-def generate_qa_pairs(text: str, n: int = 5, model: str = "claude-haiku-4-5-20251001") -> list[dict]:
-    client = anthropic.Anthropic()
-    response = client.messages.create(
+def generate_qa_pairs(
+    text: str,
+    n: int = 5,
+    model: str = DEFAULT_LLM_MODEL,
+    api_key: str | None = None,
+) -> list[dict]:
+    from backend.services.openrouter_client import create_openrouter_client
+    client = create_openrouter_client(api_key)
+    response = client.chat.completions.create(
         model=model,
         max_tokens=2048,
-        system=_SYSTEM.format(n=n),
-        messages=[{"role": "user", "content": text}],
+        messages=[
+            {"role": "system", "content": _SYSTEM.format(n=n)},
+            {"role": "user",   "content": text},
+        ],
     )
-    raw = response.content[0].text.strip()
-    import re
+    raw = response.choices[0].message.content or ""
     match = re.search(r"\[.*\]", raw, re.DOTALL)
     return json.loads(match.group()) if match else []
 
@@ -34,15 +42,16 @@ def build_dataset(
     name: str,
     documents: list[dict],
     qa_per_doc: int = 5,
-    llm_model: str = "claude-haiku-4-5-20251001",
+    llm_model: str = DEFAULT_LLM_MODEL,
+    api_key: str | None = None,
 ) -> pathlib.Path:
     """
     Build and save a dataset JSON from a list of {id, text, metadata} dicts.
-    Generates QA pairs for each document using Claude.
+    Generates QA pairs for each document using an LLM via OpenRouter.
     """
     all_qa: list[dict] = []
     for doc in documents:
-        pairs = generate_qa_pairs(doc["text"], n=qa_per_doc, model=llm_model)
+        pairs = generate_qa_pairs(doc["text"], n=qa_per_doc, model=llm_model, api_key=api_key)
         for p in pairs:
             p["doc_id"] = doc["id"]
         all_qa.extend(pairs)

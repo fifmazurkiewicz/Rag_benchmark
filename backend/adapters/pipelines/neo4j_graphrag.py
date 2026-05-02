@@ -10,10 +10,14 @@ Compared to FalkorDB GraphRAG SDK (which wraps everything),
 this adapter gives full control over Cypher and graph schema.
 """
 from __future__ import annotations
+import logging
 import time
 from typing import Any
+from backend.config import DEFAULT_LLM_MODEL, DEFAULT_EMBEDDER_MODEL, DEFAULT_MAX_TOKENS
 from backend.registry import register
 from backend.interfaces import Document, Chunk, PipelineResult, IngestStats
+
+logger = logging.getLogger(__name__)
 
 _EXTRACT_SYSTEM = """Extract entities and relationships from the text.
 Return JSON: {"entities": [{"name": str, "type": str, "desc": str}],
@@ -26,24 +30,29 @@ class Neo4jGraphRAGPipeline:
 
     def __init__(self, config: dict[str, Any]):
         from neo4j import GraphDatabase
-        import anthropic
-        self._uri = config.get("neo4j_uri", "bolt://localhost:7687")
-        self._user = config.get("neo4j_user", "neo4j")
-        self._password = config.get("neo4j_password", "password")
-        self._llm_model = config.get("llm_model", "claude-haiku-4-5-20251001")
-        self._embedder_model = config.get("embedder_model", "openai/text-embedding-3-small")
-        self._driver = GraphDatabase.driver(self._uri, auth=(self._user, self._password))
-        self._llm = anthropic.Anthropic()
-        self._embedder = None
-        self._dim = int(config.get("embedding_dim", 1536))
+
+        self._uri            = config.get("neo4j_uri", "bolt://localhost:7687")
+        self._user           = config.get("neo4j_user", "neo4j")
+        self._password       = config.get("neo4j_password", "password")
+        self._llm_model      = config.get("llm_model", DEFAULT_LLM_MODEL)
+        self._embedder_model = config.get("embedder_model", DEFAULT_EMBEDDER_MODEL)
+        self._api_key        = config.get("openrouter_api_key")
+        self._dim            = int(config.get("embedding_dim", 1536))
+        self._driver         = GraphDatabase.driver(self._uri, auth=(self._user, self._password))
+        self._llm            = None
+        self._embedder       = None
         self._ensure_schema()
+
+    def _get_llm(self):
+        if self._llm is None:
+            from backend.services.openrouter_client import create_openrouter_client
+            self._llm = create_openrouter_client(self._api_key)
+        return self._llm
 
     def _get_embedder(self):
         if self._embedder is None:
             from backend.factory import build_embedder
-            self._embedder = build_embedder(
-                self._embedder_model, {"model": self._embedder_model}
-            )
+            self._embedder = build_embedder(self._embedder_model, {"model": self._embedder_model})
         return self._embedder
 
     def _ensure_schema(self):
@@ -58,13 +67,15 @@ class Neo4jGraphRAGPipeline:
 
     def _extract(self, text: str) -> dict:
         import json, re
-        resp = self._llm.messages.create(
+        response = self._get_llm().chat.completions.create(
             model=self._llm_model,
-            max_tokens=1024,
-            system=_EXTRACT_SYSTEM,
-            messages=[{"role": "user", "content": text[:3000]}],
+            max_tokens=DEFAULT_MAX_TOKENS,
+            messages=[
+                {"role": "system", "content": _EXTRACT_SYSTEM},
+                {"role": "user",   "content": text[:3000]},
+            ],
         )
-        raw = resp.content[0].text.strip()
+        raw = response.choices[0].message.content or ""
         m = re.search(r"\{.*\}", raw, re.DOTALL)
         try:
             return json.loads(m.group()) if m else {"entities": [], "relations": []}
@@ -80,12 +91,10 @@ class Neo4jGraphRAGPipeline:
             vec = embedder.embed_query(doc.text)
 
             with self._driver.session() as s:
-                # Store chunk node with embedding
                 s.run(
                     "MERGE (c:Chunk {id: $id}) SET c.text=$text, c.doc_id=$doc_id, c.embedding=$vec",
                     id=doc.id, text=doc.text[:2000], doc_id=doc.id, vec=vec,
                 )
-                # Store entities
                 for ent in extracted.get("entities", []):
                     s.run(
                         "MERGE (e:Entity {name: $name}) SET e.type=$type, e.desc=$desc",
@@ -95,7 +104,6 @@ class Neo4jGraphRAGPipeline:
                         "MATCH (c:Chunk {id:$cid}), (e:Entity {name:$name}) MERGE (c)-[:MENTIONS]->(e)",
                         cid=doc.id, name=ent.get("name", ""),
                     )
-                # Store relations between entities
                 for rel in extracted.get("relations", []):
                     rel_type = rel.get("rel", "RELATED_TO").upper().replace(" ", "_")
                     s.run(
@@ -104,10 +112,9 @@ class Neo4jGraphRAGPipeline:
                         src=rel.get("source", ""), tgt=rel.get("target", ""),
                     )
 
-        return IngestStats(
-            doc_count=len(docs),
-            duration_ms=(time.perf_counter() - t0) * 1000,
-        )
+        elapsed = (time.perf_counter() - t0) * 1000
+        logger.info("Neo4j ingest done: docs=%d latency=%.0fms", len(docs), elapsed)
+        return IngestStats(doc_count=len(docs), duration_ms=elapsed)
 
     async def query(self, question: str, top_k: int = 5) -> PipelineResult:
         t0 = time.perf_counter()
@@ -115,7 +122,6 @@ class Neo4jGraphRAGPipeline:
         q_vec = embedder.embed_query(question)
 
         with self._driver.session() as s:
-            # Step 1: vector search → seed chunks
             seed = s.run(
                 """
                 CALL db.index.vector.queryNodes('chunk_vec', $k, $vec)
@@ -125,7 +131,6 @@ class Neo4jGraphRAGPipeline:
                 k=top_k, vec=q_vec,
             ).data()
 
-            # Step 2: expand — get entities mentioned in seed chunks + their neighbours
             chunk_ids = [r["id"] for r in seed]
             graph_ctx = s.run(
                 """
@@ -154,13 +159,13 @@ class Neo4jGraphRAGPipeline:
             f"Document chunks:\n{context}\n\n"
             f"Question: {question}\nAnswer:"
         )
-        resp = self._llm.messages.create(
+        response = self._get_llm().chat.completions.create(
             model=self._llm_model,
-            max_tokens=1024,
+            max_tokens=DEFAULT_MAX_TOKENS,
             messages=[{"role": "user", "content": prompt}],
         )
-        answer = resp.content[0].text
-        tokens = resp.usage.input_tokens + resp.usage.output_tokens
+        answer = response.choices[0].message.content or ""
+        tokens = response.usage.total_tokens if response.usage else 0
 
         return PipelineResult(
             answer=answer,

@@ -47,7 +47,7 @@ export interface MetricScore {
 export interface PipelineRunResult {
   pipeline_name: string;
   pipeline_type: string;
-  config?: PipelineConfig;
+  config: PipelineConfig;
   metrics: MetricScore[];
   avg_latency_ms: number;
   total_tokens: number;
