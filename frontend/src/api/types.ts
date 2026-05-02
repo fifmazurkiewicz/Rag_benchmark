@@ -3,6 +3,8 @@ export interface Registry {
   chunker: string[];
   embedder: string[];
   vector_store: string[];
+  reranker: string[];
+  query_transformer: string[];
 }
 
 export interface PipelineConfig {
@@ -13,7 +15,10 @@ export interface PipelineConfig {
   overlap: number;
   embedder_model: string;
   llm_model: string;
+  reranker: string;
+  query_transformer: string;
   top_k: number;
+  retrieve_k: number;
   extra: Record<string, unknown>;
 }
 
@@ -28,7 +33,7 @@ export interface ExperimentConfig {
 export interface RunStatus {
   run_id: string;
   experiment_name: string;
-  status: "pending" | "running" | "done" | "error";
+  status: "pending" | "running" | "done" | "error" | "cached";
   progress: number;
   message: string;
 }
@@ -42,6 +47,7 @@ export interface MetricScore {
 export interface PipelineRunResult {
   pipeline_name: string;
   pipeline_type: string;
+  config?: PipelineConfig;
   metrics: MetricScore[];
   avg_latency_ms: number;
   total_tokens: number;
@@ -55,6 +61,7 @@ export interface QAAnswer {
   source_chunks: string[];
   latency_ms: number;
   tokens_used: number;
+  metadata?: Record<string, unknown>;
 }
 
 export interface ExperimentResult {
@@ -87,8 +94,11 @@ export const DEFAULT_PIPELINE_CONFIG: PipelineConfig = {
   chunker: "fixed",
   chunk_size: 512,
   overlap: 64,
-  embedder_model: "openai/text-embedding-3-small",
-  llm_model: "claude-haiku-4-5-20251001",
+  embedder_model: "openrouter/text-embedding-3-small",
+  llm_model: "anthropic/claude-haiku-4-5-20251001",
+  reranker: "none",
+  query_transformer: "none",
   top_k: 5,
+  retrieve_k: 0,
   extra: {},
 };

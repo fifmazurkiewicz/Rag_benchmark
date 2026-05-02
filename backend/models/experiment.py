@@ -9,9 +9,12 @@ class PipelineConfig(BaseModel):
     chunker: str = "fixed"
     chunk_size: int = 512
     overlap: int = 64
-    embedder_model: str = "openai/text-embedding-3-small"
-    llm_model: str = "claude-haiku-4-5-20251001"
+    embedder_model: str = "openrouter/text-embedding-3-small"
+    llm_model: str = "anthropic/claude-haiku-4-5-20251001"
+    reranker: str = "none"
+    query_transformer: str = "none"
     top_k: int = 5
+    retrieve_k: int = 0   # 0 → auto (top_k * 4)
     extra: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -28,6 +31,6 @@ class ExperimentConfig(BaseModel):
 class RunStatus(BaseModel):
     run_id: str
     experiment_name: str
-    status: str  # pending | running | done | error
+    status: str  # pending | running | done | error | cached
     progress: float = 0.0
     message: str = ""

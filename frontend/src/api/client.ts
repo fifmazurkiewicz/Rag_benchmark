@@ -26,11 +26,16 @@ export const api = {
   getExperiment: (name: string) => request<ExperimentConfig>(`/experiments/${name}`),
   saveExperiment: (config: ExperimentConfig) =>
     request<{ saved: string }>("/experiments/", { method: "POST", body: JSON.stringify(config) }),
-  runExperiment: (name: string) =>
-    request<{ run_id: string }>(`/experiments/${name}/run`, { method: "POST" }),
+  runExperiment: (name: string, force = false) =>
+    request<{ run_id: string; cached: boolean }>(`/experiments/${name}/run?force=${force}`, { method: "POST" }),
   getRunStatus: (runId: string) => request<RunStatus>(`/experiments/runs/${runId}`),
   getRunResult: (runId: string) => request<ExperimentResult>(`/experiments/results/${runId}`),
   listResults: () => request<string[]>("/experiments/results/"),
+
+  // Export
+  exportExcel: (runId: string) => {
+    window.open(`${BASE}/experiments/results/${runId}/export`, "_blank");
+  },
 
   // Dataset sources
   listSources: () => request<{ name: string; description: string }[]>("/datasets/sources/"),

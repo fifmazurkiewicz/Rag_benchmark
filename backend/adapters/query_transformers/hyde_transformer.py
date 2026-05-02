@@ -13,11 +13,13 @@ Effect on retrieval quality:
   - Can hurt precision if the hallucinated answer leads retrieval astray
   - Adds one LLM call per query (latency + cost)
 
+All LLM calls go through OpenRouter (OPENROUTER_API_KEY).
+
 Usage in experiment config:
   query_transformer: hyde
-  hyde_model: claude-haiku-4-5-20251001    (default — cheap + fast)
-  hyde_max_tokens: 256                     (default)
-  hyde_instruction: "..."                  (optional custom prompt)
+  hyde_model: anthropic/claude-haiku-4-5-20251001   (default)
+  hyde_max_tokens: 256
+  hyde_instruction: "..."                            (optional custom prompt)
 """
 from __future__ import annotations
 
@@ -25,6 +27,8 @@ import os
 from typing import Any
 
 from backend.registry import register
+
+_OPENROUTER_BASE = "https://openrouter.ai/api/v1"
 
 _DEFAULT_INSTRUCTION = (
     "You are a helpful assistant. Generate a single short passage (2-4 sentences) "
@@ -37,22 +41,23 @@ _DEFAULT_INSTRUCTION = (
 @register("query_transformer", "hyde")
 class HyDETransformer:
     def __init__(self, config: dict[str, Any] | None = None):
+        import openai
         cfg = config or {}
-        self._model = cfg.get("hyde_model", "claude-haiku-4-5-20251001")
+        self._model = cfg.get("hyde_model", "anthropic/claude-haiku-4-5-20251001")
         self._max_tokens = int(cfg.get("hyde_max_tokens", 256))
         self._instruction = cfg.get("hyde_instruction", _DEFAULT_INSTRUCTION)
-        self._client = None
-
-    def _get_client(self):
-        if self._client is None:
-            import anthropic
-            self._client = anthropic.Anthropic()
-        return self._client
+        self._client = openai.OpenAI(
+            api_key=cfg.get("openrouter_api_key") or os.environ["OPENROUTER_API_KEY"],
+            base_url=_OPENROUTER_BASE,
+            default_headers={
+                "HTTP-Referer": "https://github.com/fifmazurkiewicz/Rag_benchmark",
+                "X-Title": "RAG Benchmark",
+            },
+        )
 
     def transform(self, query: str) -> str:
         """Return a hypothetical answer passage to use as the retrieval query."""
-        client = self._get_client()
-        response = client.messages.create(
+        response = self._client.chat.completions.create(
             model=self._model,
             max_tokens=self._max_tokens,
             messages=[
@@ -62,4 +67,4 @@ class HyDETransformer:
                 }
             ],
         )
-        return response.content[0].text.strip()
+        return response.choices[0].message.content.strip()

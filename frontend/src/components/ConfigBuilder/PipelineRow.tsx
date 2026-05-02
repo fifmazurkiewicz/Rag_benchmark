@@ -67,7 +67,12 @@ export default function PipelineRow({ index, control, register, registry, onRemo
         <div>
           <label className="label text-xs">Embedder</label>
           <select {...register(field("embedder_model"))} className="input text-sm">
-            {(registry?.embedder ?? ["openai/text-embedding-3-small", "openai/text-embedding-3-large", "hf/bge-large-en", "hf/all-MiniLM-L6-v2"]).map((e) => (
+            {(registry?.embedder ?? [
+              "openrouter/text-embedding-3-small",
+              "openrouter/text-embedding-3-large",
+              "hf/bge-large-en",
+              "hf/all-MiniLM-L6-v2",
+            ]).map((e) => (
               <option key={e} value={e}>{e}</option>
             ))}
           </select>
@@ -75,12 +80,34 @@ export default function PipelineRow({ index, control, register, registry, onRemo
 
         <div>
           <label className="label text-xs">LLM model</label>
-          <input {...register(field("llm_model"))} className="input text-sm" />
+          <input
+            {...register(field("llm_model"))}
+            className="input text-sm"
+            placeholder="anthropic/claude-haiku-4-5-20251001"
+          />
         </div>
 
         <div>
           <label className="label text-xs">Top K</label>
           <input type="number" {...register(field("top_k"), { valueAsNumber: true })} className="input text-sm" />
+        </div>
+
+        <div>
+          <label className="label text-xs">Query transformer</label>
+          <select {...register(field("query_transformer"))} className="input text-sm">
+            {(registry?.query_transformer ?? ["none", "hyde"]).map((q) => (
+              <option key={q} value={q}>{q}</option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label className="label text-xs">Reranker</label>
+          <select {...register(field("reranker"))} className="input text-sm">
+            {(registry?.reranker ?? ["none", "cross_encoder", "openrouter"]).map((r) => (
+              <option key={r} value={r}>{r}</option>
+            ))}
+          </select>
         </div>
       </div>
 

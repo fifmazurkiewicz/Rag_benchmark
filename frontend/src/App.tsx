@@ -3,6 +3,7 @@ import ExperimentsPage from "./pages/ExperimentsPage";
 import RunPage from "./pages/RunPage";
 import DashboardPage from "./pages/DashboardPage";
 import DatasetsPage from "./pages/DatasetsPage";
+import LeaderboardPage from "./pages/LeaderboardPage";
 
 const navClass = ({ isActive }: { isActive: boolean }) =>
   `px-4 py-2 rounded text-sm font-medium transition-colors ${
@@ -18,6 +19,7 @@ export default function App() {
           <NavLink to="/" end className={navClass}>Experiments</NavLink>
           <NavLink to="/datasets" className={navClass}>Datasets</NavLink>
           <NavLink to="/dashboard" className={navClass}>Dashboard</NavLink>
+          <NavLink to="/leaderboard" className={navClass}>Leaderboard</NavLink>
         </nav>
       </header>
       <main className="flex-1 p-6">
@@ -26,6 +28,7 @@ export default function App() {
           <Route path="/run/:runId" element={<RunPage />} />
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/datasets" element={<DatasetsPage />} />
+          <Route path="/leaderboard" element={<LeaderboardPage />} />
         </Routes>
       </main>
     </div>

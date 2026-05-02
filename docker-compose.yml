@@ -41,8 +41,11 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - NEO4J_PASSWORD=${NEO4J_PASSWORD:-password}
+      # Optional — only if bypassing OpenRouter for specific providers
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
     volumes:
       - ./datasets_store:/app/datasets_store
       - ./experiments:/app/experiments
