@@ -11,10 +11,15 @@ Core idea:
        d. LLM generates answer citing note titles
 """
 from __future__ import annotations
+import logging
 import time
 from typing import Any
+from backend.config import DEFAULT_EMBEDDER_MODEL, DEFAULT_LLM_MODEL, DEFAULT_MAX_TOKENS, DEFAULT_TOP_K
 from backend.registry import register
 from backend.interfaces import Document, Chunk, PipelineResult, IngestStats
+from backend.utils.similarity import cosine_similarity
+
+logger = logging.getLogger(__name__)
 
 
 @register("pipeline", "obsidian_rag")
@@ -22,26 +27,20 @@ class ObsidianRAGPipeline:
 
     def __init__(self, config: dict[str, Any]):
         from backend.factory import build_embedder
-        import anthropic
+        from backend.services.openrouter_client import create_openrouter_client
 
-        self._embedder_model = config.get("embedder_model", "openai/text-embedding-3-small")
-        self._llm_model      = config.get("llm_model", "claude-haiku-4-5-20251001")
-        self._top_k          = int(config.get("top_k", 5))
-        self._graph_hops     = int(config.get("graph_hops", 1))  # how far to follow links
+        self._embedder_model = config.get("embedder_model", DEFAULT_EMBEDDER_MODEL)
+        self._llm_model      = config.get("llm_model", DEFAULT_LLM_MODEL)
+        self._top_k          = int(config.get("top_k", DEFAULT_TOP_K))
+        self._graph_hops     = int(config.get("graph_hops", 1))
         self._embedder       = build_embedder(self._embedder_model, config)
-        self._llm            = anthropic.Anthropic()
+        self._llm            = create_openrouter_client(config.get("openrouter_api_key"))
 
         # In-memory stores (populated at ingest)
-        self._chunks:     list[Chunk]         = []
-        self._vectors:    list[list[float]]   = []
+        self._chunks:     list[Chunk]          = []
+        self._vectors:    list[list[float]]    = []
         self._note_index: dict[str, list[int]] = {}  # doc_id → chunk indices
         self._link_graph: dict[str, list[str]] = {}  # doc_id → [linked doc_ids]
-
-    def _cosine(self, a: list[float], b: list[float]) -> float:
-        dot  = sum(x * y for x, y in zip(a, b))
-        na   = sum(x * x for x in a) ** 0.5
-        nb   = sum(x * x for x in b) ** 0.5
-        return dot / (na * nb) if na and nb else 0.0
 
     async def ingest(self, docs: list[Document]) -> IngestStats:
         from backend.adapters.chunkers.obsidian import ObsidianChunker
@@ -91,7 +90,7 @@ class ObsidianRAGPipeline:
         # Step 1: score all chunks by cosine similarity
         scored = sorted(
             enumerate(self._vectors),
-            key=lambda iv: self._cosine(q_vec, iv[1]),
+            key=lambda iv: cosine_similarity(q_vec, iv[1]),
             reverse=True,
         )
         seed_indices = [i for i, _ in scored[:k]]
@@ -107,7 +106,7 @@ class ObsidianRAGPipeline:
         ]
         reranked = sorted(
             candidate_indices,
-            key=lambda i: self._cosine(q_vec, self._vectors[i]),
+            key=lambda i: cosine_similarity(q_vec, self._vectors[i]),
             reverse=True,
         )[:k * 2]
 
@@ -126,13 +125,13 @@ class ObsidianRAGPipeline:
             f"Notes:\n{context}\n\n"
             f"Question: {question}\nAnswer:"
         )
-        resp   = self._llm.messages.create(
+        resp   = self._llm.chat.completions.create(
             model=self._llm_model,
-            max_tokens=1024,
+            max_tokens=DEFAULT_MAX_TOKENS,
             messages=[{"role": "user", "content": prompt}],
         )
-        answer = resp.content[0].text
-        tokens = resp.usage.input_tokens + resp.usage.output_tokens
+        answer = resp.choices[0].message.content or ""
+        tokens = resp.usage.total_tokens if resp.usage else 0
 
         return PipelineResult(
             answer=answer,

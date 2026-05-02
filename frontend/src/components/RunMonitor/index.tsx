@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { createRunWebSocket } from "../../api/client";
 import type { RunStatus } from "../../api/types";
+import { STATUS_COLORS } from "../../constants/pipeline";
 
 interface Props {
   runId: string;
@@ -22,12 +23,7 @@ export default function RunMonitor({ runId, onDone }: Props) {
 
   if (!status) return <div className="text-gray-500 text-sm">Connecting...</div>;
 
-  const statusColor = {
-    pending: "text-gray-400",
-    running: "text-yellow-400",
-    done: "text-green-400",
-    error: "text-red-400",
-  }[status.status];
+  const statusColor = STATUS_COLORS[status.status] ?? "text-gray-400";
 
   return (
     <div className="border border-gray-700 rounded-lg p-4 space-y-3 bg-gray-900">

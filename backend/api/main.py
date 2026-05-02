@@ -1,5 +1,13 @@
+import logging
+
 from fastapi import FastAPI, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)-8s %(name)s  %(message)s",
+    datefmt="%H:%M:%S",
+)
 
 # Import adapters so @register decorators fire at startup
 import backend.factory  # noqa: F401

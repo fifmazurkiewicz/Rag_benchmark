@@ -30,6 +30,7 @@ from __future__ import annotations
 import uuid
 from typing import Any
 
+from backend.config import DEFAULT_CHUNK_SIZE, DEFAULT_LATE_CHUNKING_MODEL, LATE_CHUNKING_MAX_TOKENS
 from backend.registry import register
 from backend.interfaces import Document, Chunk
 
@@ -37,8 +38,8 @@ from backend.interfaces import Document, Chunk
 @register("chunker", "late_chunking")
 class LateChunkingChunker:
     def __init__(self, config: dict[str, Any]):
-        self._chunk_size = int(config.get("chunk_size", 512))
-        self._model_name = config.get("late_chunking_model", "BAAI/bge-m3")
+        self._chunk_size = int(config.get("chunk_size", DEFAULT_CHUNK_SIZE))
+        self._model_name = config.get("late_chunking_model", DEFAULT_LATE_CHUNKING_MODEL)
         self._tokenizer = None
         self._model = None
 
@@ -64,7 +65,7 @@ class LateChunkingChunker:
             doc.text,
             return_tensors="pt",
             truncation=True,
-            max_length=8192,
+            max_length=LATE_CHUNKING_MAX_TOKENS,
             return_offsets_mapping=True,
         )
         offset_mapping = encoding.pop("offset_mapping")[0]  # (seq_len, 2) — char spans

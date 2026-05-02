@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { PipelineConfig } from "../api/types";
+import { GRAPH_PIPELINE_TYPES } from "../constants/pipeline";
 
 interface Props {
   pipelines: PipelineConfig[];
@@ -15,7 +16,7 @@ interface Step {
 }
 
 function stepsFromConfig(cfg: PipelineConfig): Step[] {
-  const isGraph = cfg.pipeline === "falkordb_graphrag" || cfg.pipeline === "neo4j_graphrag";
+  const isGraph = GRAPH_PIPELINE_TYPES.has(cfg.pipeline);
   const hasHyde = cfg.query_transformer && cfg.query_transformer !== "none";
   const hasReranker = cfg.reranker && cfg.reranker !== "none";
 

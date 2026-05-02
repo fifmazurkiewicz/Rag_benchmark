@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import pathlib
 import uuid
 from fastapi import APIRouter, HTTPException, BackgroundTasks
@@ -9,6 +10,8 @@ from fastapi.responses import StreamingResponse
 
 from backend.models.experiment import ExperimentConfig, RunStatus
 from backend.models.result import ExperimentResult
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/experiments", tags=["experiments"])
 
@@ -202,70 +205,17 @@ def _build_excel(data: dict) -> bytes:
 # ---------------------------------------------------------------------------
 
 async def _execute_run(run_id: str, config: ExperimentConfig):
-    from backend.factory import build_pipeline
-    from backend.datasets.loaders import load_dataset
-    from backend.evaluation.engine import evaluate_pipeline
+    from backend.services.experiment_executor import execute_experiment
 
     run = _active_runs[run_id]
-    run.status = "running"
-    pipeline_results = []
-
     try:
-        dataset = load_dataset(config.dataset)
-        docs = dataset["documents"]
-        qa_pairs = dataset["qa_pairs"]
-        total = len(config.pipelines)
-
-        for idx, pcfg in enumerate(config.pipelines):
-            run.message = f"Pipeline {pcfg.name} ({idx + 1}/{total})"
-            run.progress = idx / total
-
-            cfg_dict = pcfg.model_dump()
-            cfg_dict["pipeline"] = pcfg.pipeline
-            pipeline = build_pipeline(cfg_dict)
-
-            await pipeline.ingest(docs)
-            answers = []
-            for qa in qa_pairs:
-                result = await pipeline.query(qa["question"])
-                answers.append({
-                    "question": qa["question"],
-                    "ground_truth": qa.get("answer", ""),
-                    "answer": result.answer,
-                    "source_chunks": [c.text for c in result.source_chunks],
-                    "latency_ms": result.latency_ms,
-                    "tokens_used": result.tokens_used,
-                    "metadata": result.metadata,
-                })
-            await pipeline.teardown()
-
-            metrics = await evaluate_pipeline(answers, config.metrics)
-            pipeline_results.append({
-                "pipeline_name": pcfg.name,
-                "pipeline_type": pcfg.pipeline,
-                "config": pcfg.model_dump(),
-                "metrics": [m if isinstance(m, dict) else m.model_dump() for m in metrics],
-                "avg_latency_ms": sum(a["latency_ms"] for a in answers) / max(len(answers), 1),
-                "total_tokens": sum(a["tokens_used"] for a in answers),
-                "answers": answers,
-            })
-
-        result = ExperimentResult(
-            experiment_name=config.name,
-            run_id=run_id,
-            dataset=config.dataset,
-            pipeline_results=pipeline_results,
-        )
+        result = await execute_experiment(run_id, config, run)
         (RESULTS_DIR / f"{run_id}.json").write_text(result.model_dump_json(indent=2))
-
         cache = _load_cache()
         cache[_config_hash(config)] = run_id
         _save_cache(cache)
-
-        run.status = "done"
-        run.progress = 1.0
-        run.message = "Completed"
-
+        logger.info("run=%s saved to disk", run_id)
     except Exception as exc:
         run.status = "error"
         run.message = str(exc)
+        logger.error("run=%s failed: %s", run_id, exc, exc_info=True)

@@ -15,7 +15,7 @@ export default function ConfigBuilder({ initial, onSubmit, loading }: Props) {
   const { data: registry } = useQuery({ queryKey: ["registry"], queryFn: api.getRegistry });
   const { data: datasets } = useQuery({ queryKey: ["datasets"], queryFn: api.listDatasets });
 
-  const { register, control, handleSubmit, watch } = useForm<ExperimentConfig>({
+  const { register, control, handleSubmit, watch, setValue } = useForm<ExperimentConfig>({
     defaultValues: {
       name: initial?.name ?? "experiment_1",
       dataset: initial?.dataset ?? "",
@@ -28,8 +28,11 @@ export default function ConfigBuilder({ initial, onSubmit, loading }: Props) {
   const { fields, append, remove } = useFieldArray({ control, name: "pipelines" });
   const selectedMetrics = watch("metrics");
 
-  const toggleMetric = (m: string, current: string[], setValue: (v: string[]) => void) => {
-    setValue(current.includes(m) ? current.filter((x) => x !== m) : [...current, m]);
+  const toggleMetric = (m: string) => {
+    const updated = selectedMetrics.includes(m)
+      ? selectedMetrics.filter((x) => x !== m)
+      : [...selectedMetrics, m];
+    setValue("metrics", updated);
   };
 
   return (
@@ -62,9 +65,7 @@ export default function ConfigBuilder({ initial, onSubmit, loading }: Props) {
             <button
               key={m}
               type="button"
-              onClick={() => toggleMetric(m, selectedMetrics, (v) => {
-                // react-hook-form field array manual set
-              })}
+              onClick={() => toggleMetric(m)}
               className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
                 selectedMetrics?.includes(m)
                   ? "bg-indigo-600 border-indigo-600 text-white"

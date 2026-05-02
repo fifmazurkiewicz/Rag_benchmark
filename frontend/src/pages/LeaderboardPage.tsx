@@ -2,17 +2,7 @@ import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../api/client";
 import type { ExperimentResult, PipelineRunResult } from "../api/types";
-
-const SCORE_METRICS = [
-  "faithfulness",
-  "answer_relevancy",
-  "context_precision",
-  "context_recall",
-  "answer_correctness",
-  "hit_rate",
-];
-
-const COST_METRICS = ["latency_p95"];
+import { metricScoreColor } from "../utils/metrics";
 
 type SortDir = "asc" | "desc";
 
@@ -27,12 +17,26 @@ interface Row {
   scores: Record<string, number>;
 }
 
-function metricColor(name: string, val: number): string {
-  if (COST_METRICS.includes(name)) return "text-gray-300";
-  if (val < 0) return "text-gray-600";
-  if (val >= 0.7) return "text-green-400";
-  if (val >= 0.4) return "text-yellow-400";
-  return "text-red-400";
+interface SortHeaderProps {
+  col: string;
+  label: string;
+  sortCol: string;
+  sortDir: SortDir;
+  onSort: (col: string) => void;
+}
+
+function SortHeader({ col, label, sortCol, sortDir, onSort }: SortHeaderProps) {
+  const active = sortCol === col;
+  return (
+    <th
+      className={`py-2 px-3 text-right cursor-pointer select-none whitespace-nowrap font-medium transition-colors ${
+        active ? "text-indigo-300" : "text-gray-400 hover:text-gray-200"
+      }`}
+      onClick={() => onSort(col)}
+    >
+      {label}{active ? (sortDir === "desc" ? " ↓" : " ↑") : ""}
+    </th>
+  );
 }
 
 export default function LeaderboardPage() {
@@ -97,20 +101,6 @@ export default function LeaderboardPage() {
     else { setSortCol(col); setSortDir("desc"); }
   }
 
-  function SortHeader({ col, label }: { col: string; label: string }) {
-    const active = sortCol === col;
-    return (
-      <th
-        className={`py-2 px-3 text-right cursor-pointer select-none whitespace-nowrap font-medium transition-colors ${
-          active ? "text-indigo-300" : "text-gray-400 hover:text-gray-200"
-        }`}
-        onClick={() => toggleSort(col)}
-      >
-        {label}{active ? (sortDir === "desc" ? " ↓" : " ↑") : ""}
-      </th>
-    );
-  }
-
   if (isLoading) {
     return <div className="text-center py-20 text-gray-500">Loading results…</div>;
   }
@@ -150,10 +140,10 @@ export default function LeaderboardPage() {
               <th className="py-2 px-3 text-left text-gray-400 font-medium whitespace-nowrap">Experiment</th>
               <th className="py-2 px-3 text-left text-gray-400 font-medium whitespace-nowrap">Dataset</th>
               <th className="py-2 px-3 text-left text-gray-400 font-medium whitespace-nowrap">Type</th>
-              <SortHeader col="avg_latency_ms" label="Latency (ms)" />
-              <SortHeader col="total_tokens" label="Tokens" />
+              <SortHeader col="avg_latency_ms" label="Latency (ms)" sortCol={sortCol} sortDir={sortDir} onSort={toggleSort} />
+              <SortHeader col="total_tokens" label="Tokens" sortCol={sortCol} sortDir={sortDir} onSort={toggleSort} />
               {allMetrics.map((m) => (
-                <SortHeader key={m} col={m} label={m} />
+                <SortHeader key={m} col={m} label={m} sortCol={sortCol} sortDir={sortDir} onSort={toggleSort} />
               ))}
               <th className="py-2 px-3 text-gray-400 font-medium">Export</th>
             </tr>
@@ -173,7 +163,7 @@ export default function LeaderboardPage() {
                 {allMetrics.map((m) => {
                   const val = row.scores[m] ?? -1;
                   return (
-                    <td key={m} className={`py-2 px-3 text-right font-mono ${metricColor(m, val)}`}>
+                    <td key={m} className={`py-2 px-3 text-right font-mono ${metricScoreColor(m, val)}`}>
                       {val < 0 ? "—" : val.toFixed(3)}
                     </td>
                   );
