@@ -45,7 +45,9 @@ class ModularPipeline:
         self._retrieval = cfg.get("retrieval", "dense")
         self._llm_model = cfg.get("llm_model", "anthropic/claude-haiku-4-5-20251001")
         self._top_k = int(cfg.get("top_k", 5))
-        self._retrieve_k = int(cfg.get("retrieve_k", self._top_k * 4))
+        # retrieve_k=0 means "auto" — use top_k * 4; explicit non-zero value overrides
+        raw_retrieve_k = int(cfg.get("retrieve_k", 0))
+        self._retrieve_k = raw_retrieve_k if raw_retrieve_k > 0 else self._top_k * 4
         self._llm_client = None
         self._api_key = cfg.get("openrouter_api_key") or os.environ.get("OPENROUTER_API_KEY", "")
 
@@ -84,8 +86,14 @@ class ModularPipeline:
         for doc in docs:
             all_chunks.extend(self._chunker.chunk(doc))
 
-        texts = [c.text for c in all_chunks]
-        vectors = self._embedder.embed(texts)
+        # late_chunking stores context-aware embeddings in metadata — skip re-embedding
+        precomputed = [c.metadata.get("_precomputed_embedding") for c in all_chunks]
+        if all(v is not None for v in precomputed):
+            vectors = precomputed  # type: ignore[assignment]
+        else:
+            texts = [c.text for c in all_chunks]
+            vectors = self._embedder.embed(texts)
+
         self._store.upsert(all_chunks, vectors)
 
         return IngestStats(

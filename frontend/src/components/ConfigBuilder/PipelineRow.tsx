@@ -109,6 +109,20 @@ export default function PipelineRow({ index, control, register, registry, onRemo
             ))}
           </select>
         </div>
+
+        <div>
+          <label className="label text-xs">
+            Retrieve K
+            <span className="ml-1 text-gray-600 font-normal">(0 = auto top_k×4)</span>
+          </label>
+          <input
+            type="number"
+            min={0}
+            {...register(field("retrieve_k"), { valueAsNumber: true })}
+            className="input text-sm"
+            placeholder="0"
+          />
+        </div>
       </div>
 
       {isGraphRAG && (
